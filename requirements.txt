@@ -2,4 +2,5 @@ pandas>=2.0.0
 numpy>=1.24.0
 gspread>=6.0.0
 google-auth>=2.0.0
+borsapy>=0.1.0
 pytest>=8.0.0

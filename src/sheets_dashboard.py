@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterable
 
 import pandas as pd
@@ -71,3 +72,53 @@ def ensure_columns(df: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
         if column not in result.columns:
             result[column] = ""
     return result[list(columns)]
+
+
+def get_or_create_worksheet(spreadsheet, title: str, rows: int = 1000, cols: int = 30):
+    """Get worksheet by title or create it if missing."""
+    try:
+        return spreadsheet.worksheet(title)
+    except Exception:
+        return spreadsheet.add_worksheet(title=title, rows=rows, cols=cols)
+
+
+def backup_worksheet(spreadsheet, worksheet, prefix: str = "Yedek") -> str:
+    """Copy existing worksheet before destructive updates."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_title = f"{prefix}_{worksheet.title}_{timestamp}"
+    try:
+        worksheet.duplicate(new_sheet_name=backup_title)
+    except Exception:
+        backup_ws = spreadsheet.add_worksheet(title=backup_title, rows=worksheet.row_count, cols=worksheet.col_count)
+        values = worksheet.get_all_values()
+        if values:
+            backup_ws.update(values=values, range_name="A1")
+    return backup_title
+
+
+def safe_update_worksheet(spreadsheet, worksheet_name: str, df: pd.DataFrame, *, backup: bool = True):
+    """Safely update a worksheet.
+
+    This function never clears a sheet when the dataframe is empty. It also
+    creates a backup copy before replacing data by default.
+    """
+    if df is None or df.empty:
+        raise ValueError("Dashboard boş geldi. Sayfa temizlenmedi; veri kaybı engellendi.")
+
+    worksheet = get_or_create_worksheet(spreadsheet, worksheet_name)
+    backup_title = backup_worksheet(spreadsheet, worksheet) if backup else None
+
+    values = dataframe_to_values(df)
+    worksheet.clear()
+    worksheet.update(values=values, range_name="A1")
+
+    try:
+        worksheet.freeze(rows=1)
+        worksheet.format("A1:Z1", {
+            "textFormat": {"bold": True},
+            "horizontalAlignment": "CENTER",
+        })
+    except Exception:
+        pass
+
+    return {"worksheet": worksheet.title, "backup": backup_title, "rows": len(df)}
